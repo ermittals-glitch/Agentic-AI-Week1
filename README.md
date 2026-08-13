@@ -2,6 +2,10 @@
 
 A Streamlit-based, consumer-facing healthcare claims analytics demo that helps members understand claims, spending patterns, EOB terminology, and CMS benchmark comparisons.
 
+## Live App
+
+https://healthcare-claims-analytics.streamlit.app/
+
 ## Features
 
 - Tab 1: Upload EOB/Claim Data
