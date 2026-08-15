@@ -11,6 +11,12 @@ def to_currency(value: float | int | None) -> str:
     return f"${float(value):,.2f}"
 
 
+def to_currency_or_na(value: float | int | None) -> str:
+    if value is None or pd.isna(value):
+        return "Not available"
+    return f"${float(value):,.2f}"
+
+
 def to_percent(value: float | int | None) -> str:
     if value is None or pd.isna(value):
         return "0.0%"

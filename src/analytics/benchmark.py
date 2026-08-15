@@ -32,11 +32,11 @@ def compare_claim_to_cms(claim_row: pd.Series, cms_row: pd.Series) -> pd.DataFra
         diff = member_value - cms_value
         pct_diff = safe_divide(diff, cms_value) * 100
         if pct_diff > 10:
-            flag = "Above benchmark"
+            flag = "Higher than Medicare average"
         elif pct_diff < -10:
-            flag = "Below benchmark"
+            flag = "Lower than Medicare average"
         else:
-            flag = "Near benchmark"
+            flag = "Similar to Medicare average"
 
         rows.append(
             {
@@ -60,10 +60,10 @@ def _signal_from_pct(pct_diff: float | None) -> str:
     if pct_diff is None or pd.isna(pct_diff):
         return "No CMS match"
     if pct_diff > 10:
-        return "Above benchmark"
+        return "Higher than Medicare average"
     if pct_diff < -10:
-        return "Below benchmark"
-    return "Near benchmark"
+        return "Lower than Medicare average"
+    return "Similar to Medicare average"
 
 
 def _parse_amount(text_value: object) -> float | None:
@@ -143,20 +143,28 @@ def build_eob_benchmark_analysis(parsed_eob_df: pd.DataFrame, cms_df: pd.DataFra
 
     rows: list[dict] = []
     for _, r in eob.iterrows():
-        codes = _extract_codes(r.get("detected_hcpcs_codes"))
-        single_code = len(codes) == 1
+        service_lines = r.get("service_lines")
+        if not isinstance(service_lines, list) or not service_lines:
+            codes = _extract_codes(r.get("detected_hcpcs_codes"))
+            service_lines = [
+                {
+                    "hcpcs_code": code,
+                    "service_description": "Service from uploaded EOB",
+                    "provider_charge_text": r.get("provider_charge_text") if len(codes) == 1 else None,
+                    "allowed_amount_text": r.get("allowed_amount_text") if len(codes) == 1 else None,
+                    "insurance_paid_text": r.get("insurance_paid_text") if len(codes) == 1 else None,
+                }
+                for code in codes
+            ]
 
-        provider_charge = _parse_amount(r.get("provider_charge_text"))
-        allowed_amount = _parse_amount(r.get("allowed_amount_text"))
-        insurance_paid = _parse_amount(r.get("insurance_paid_text"))
-
-        for code in codes:
+        for service in service_lines:
+            code = str(service.get("hcpcs_code") or "")
             cms_matches = cms[cms["hcpcs_code"] == code]
             cms_row = None if cms_matches.empty else cms_matches.iloc[0]
             metrics = [
-                ("Provider Charge", provider_charge if single_code else None, "avg_submitted_charge"),
-                ("Allowed Amount", allowed_amount if single_code else None, "avg_medicare_allowed_amount"),
-                ("Insurance Paid", insurance_paid if single_code else None, "avg_medicare_payment"),
+                ("Provider Charge", _parse_amount(service.get("provider_charge_text")), "avg_submitted_charge"),
+                ("Allowed Amount", _parse_amount(service.get("allowed_amount_text")), "avg_medicare_allowed_amount"),
+                ("Insurance Paid", _parse_amount(service.get("insurance_paid_text")), "avg_medicare_payment"),
             ]
 
             for metric_name, member_value, cms_field in metrics:
@@ -177,7 +185,7 @@ def build_eob_benchmark_analysis(parsed_eob_df: pd.DataFrame, cms_df: pd.DataFra
                     note = "No CMS benchmark row found for this HCPCS code."
                 elif member_value is None:
                     signal = "Member amount unavailable"
-                    note = "Parsed EOB has multiple HCPCS lines; line-level member amounts are not extracted in this version."
+                    note = "A reliable service-level amount was not available in the uploaded EOB."
                 else:
                     signal = _signal_from_pct(pct_diff)
                     note = ""
@@ -190,7 +198,7 @@ def build_eob_benchmark_analysis(parsed_eob_df: pd.DataFrame, cms_df: pd.DataFra
                         "service_date": r.get("date_of_service"),
                         "provider_name": r.get("provider"),
                         "hcpcs_code": code,
-                        "service_description": "Parsed from uploaded EOB",
+                        "service_description": service.get("service_description") or "Service from uploaded EOB",
                         "metric": metric_name,
                         "member_value": member_value,
                         "cms_benchmark": cms_value,

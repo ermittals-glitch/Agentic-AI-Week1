@@ -1,4 +1,4 @@
-"""Tab 5: Cost Benchmark against CMS public reference data."""
+"""Member-focused comparison with CMS Medicare public reference data."""
 
 from __future__ import annotations
 
@@ -10,59 +10,13 @@ from src.analytics.benchmark import (
     build_eob_benchmark_analysis,
 )
 from src.config import TAB_DISCLAIMER
-from src.utils.formatters import to_currency
+from src.utils.formatters import to_currency_or_na
 
 
-SIGNAL_ABOVE = "Above benchmark"
-SIGNAL_NEAR = "Near benchmark"
-SIGNAL_BELOW = "Below benchmark"
-SIGNAL_NO_MATCH = "No CMS match"
-SIGNAL_MEMBER_UNAVAILABLE = "Member amount unavailable"
-
-
-def _format_benchmark_df(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
-    money_cols = ["member_value", "cms_benchmark", "difference"]
-    for col in money_cols:
-        if col in out.columns:
-            out[col] = out[col].apply(to_currency)
-    if "difference_pct" in out.columns:
-        out["difference_pct"] = out["difference_pct"].map(
-            lambda x: "N/A" if pd.isna(x) else f"{x:.1f}%"
-        )
-    return out
-
-
-def _count_signal(df: pd.DataFrame, signal_name: str) -> int:
-    return int((df["benchmark_signal"] == signal_name).sum())
-
-
-def _build_group_signal_table(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
-    table = (
-        df.groupby([group_col, "benchmark_signal"], dropna=False)
-        .size()
-        .unstack(fill_value=0)
-        .reset_index()
-    )
-    for col in [
-        SIGNAL_ABOVE,
-        SIGNAL_NEAR,
-        SIGNAL_BELOW,
-        SIGNAL_NO_MATCH,
-        SIGNAL_MEMBER_UNAVAILABLE,
-    ]:
-        if col not in table.columns:
-            table[col] = 0
-
-    table["Needs Review"] = table[SIGNAL_NO_MATCH] + table[SIGNAL_MEMBER_UNAVAILABLE]
-    ordered_cols = [
-        group_col,
-        SIGNAL_ABOVE,
-        SIGNAL_NEAR,
-        SIGNAL_BELOW,
-        "Needs Review",
-    ]
-    return table[ordered_cols]
+def _comparison_label(row: pd.Series) -> str:
+    provider = str(row.get("provider_name") or "Provider not identified")
+    service = str(row.get("service_description") or row.get("cms_service_description") or "Service")
+    return f"{provider} · {service}"
 
 
 def render_tab_cost_benchmark(
@@ -70,21 +24,22 @@ def render_tab_cost_benchmark(
     cms_df: pd.DataFrame | None,
     parsed_eob_df: pd.DataFrame | None,
 ) -> None:
-    st.subheader("CMS Medicare Public Benchmark")
-    st.caption(
-        "Public Medicare data provided for cost context. Commercial negotiated rates may differ."
+    st.subheader("Compare a service with Medicare")
+    st.caption("Use public Medicare averages as context for one service at a time.")
+    st.info(
+        "This is not a fair-price test or billing audit. Commercial insurance plans negotiate different rates, "
+        "and costs higher than Medicare are common.",
+        icon=":material/info:",
     )
 
     if cms_df is None or cms_df.empty:
-        st.warning(
-            "CMS Medicare Public Benchmark data is currently unavailable. Re-upload data to reload the reference set."
-        )
+        st.warning("Medicare reference data is unavailable. Re-upload your information to reload it.")
         return
 
     has_claims = claims_df is not None and not claims_df.empty
     has_eob = parsed_eob_df is not None and not parsed_eob_df.empty
     if not has_claims and not has_eob:
-        st.warning("Upload claims workbook and/or EOB files in Tab 1 to run benchmark analysis.")
+        st.warning("Upload a claims file or EOB before comparing a service.")
         return
 
     analysis_frames: list[pd.DataFrame] = []
@@ -93,116 +48,66 @@ def render_tab_cost_benchmark(
     if has_eob:
         analysis_frames.append(build_eob_benchmark_analysis(parsed_eob_df, cms_df))
 
-    if not analysis_frames:
-        st.warning("No benchmark analysis rows could be produced from uploaded data.")
+    comparisons = pd.concat(analysis_frames, ignore_index=True)
+    comparisons = comparisons[comparisons["metric"] == "Allowed Amount"].reset_index(drop=True)
+    comparisons = comparisons[comparisons["cms_benchmark"].notna()].reset_index(drop=True)
+    if comparisons.empty:
+        st.info("None of the uploaded services matched the available Medicare reference data.")
         return
 
-    all_analysis = pd.concat(analysis_frames, ignore_index=True)
-    if all_analysis.empty:
-        st.warning("No benchmark analysis rows could be produced from uploaded data.")
-        return
+    comparison_ids = comparisons.index.tolist()
+    selected_id = st.pills(
+        "Choose a service",
+        comparison_ids,
+        default=comparison_ids[0],
+        format_func=lambda row_id: _comparison_label(comparisons.loc[row_id]),
+        selection_mode="single",
+    )
+    selected_id = comparison_ids[0] if selected_id is None else selected_id
+    selected = comparisons.loc[selected_id]
 
-    source_options = ["All"] + sorted(all_analysis["source_type"].dropna().unique().tolist())
-    metric_options = sorted(all_analysis["metric"].dropna().unique().tolist())
+    member_value = selected.get("member_value")
+    medicare_value = selected.get("cms_benchmark")
+    difference = selected.get("difference")
+    difference_pct = selected.get("difference_pct")
+
+    metric_cols = st.columns(3, gap="medium")
+    metric_cols[0].metric("Your plan's negotiated amount", to_currency_or_na(member_value), border=True)
+    metric_cols[1].metric("Medicare public average", to_currency_or_na(medicare_value), border=True)
+    metric_cols[2].metric("Difference", to_currency_or_na(difference), border=True)
 
     with st.container(border=True):
-        f1, f2 = st.columns(2)
-        source_filter = f1.selectbox("Data source", source_options)
-        metric_filter = f2.multiselect("Financial measures", metric_options, default=metric_options)
+        st.markdown("### What this comparison means")
+        if pd.isna(member_value):
+            st.write(
+                "The EOB did not provide a reliable service-level amount for this comparison. "
+                "Use a structured claims file or ask your insurer for the allowed amount."
+            )
+        elif pd.isna(medicare_value):
+            st.write("No Medicare average was available for this insurance service code.")
+        else:
+            direction = str(selected.get("benchmark_signal") or "Comparison available")
+            variance_text = "" if pd.isna(difference_pct) else f" ({abs(float(difference_pct)):.1f}% difference)"
+            st.write(
+                f"This service is **{direction.lower()}**{variance_text}. This does not mean the charge is right or wrong. "
+                "Medicare and commercial plans use different payment rules and negotiated rates."
+            )
 
-    filtered = all_analysis.copy()
-    if source_filter != "All":
-        filtered = filtered[filtered["source_type"] == source_filter]
-    if metric_filter:
-        filtered = filtered[filtered["metric"].isin(metric_filter)]
-
-    if filtered.empty:
-        st.info("No rows match selected filters.")
-        return
-
-    above_count = _count_signal(filtered, SIGNAL_ABOVE)
-    near_count = _count_signal(filtered, SIGNAL_NEAR)
-    below_count = _count_signal(filtered, SIGNAL_BELOW)
-    needs_review_count = _count_signal(filtered, SIGNAL_NO_MATCH) + _count_signal(
-        filtered, SIGNAL_MEMBER_UNAVAILABLE
-    )
-
-    st.markdown("### Benchmark snapshot")
-    kpi_cols = st.columns(4, gap="medium")
-    kpi_cols[0].metric("Above benchmark", f"{above_count:,}", border=True)
-    kpi_cols[1].metric("Near benchmark", f"{near_count:,}", border=True)
-    kpi_cols[2].metric("Below benchmark", f"{below_count:,}", border=True)
-    kpi_cols[3].metric("Needs review", f"{needs_review_count:,}", border=True)
-    st.caption(
-        f"{filtered['claim_id'].nunique()} claims  •  {filtered['hcpcs_code'].nunique()} HCPCS codes  •  "
-        f"{len(filtered):,} comparison rows"
-    )
-
-    by_source = _build_group_signal_table(filtered, "source_type")
-    by_metric = _build_group_signal_table(filtered, "metric")
-
-    with st.expander("Grouped benchmark summary", icon=":material/analytics:"):
-        g1, g2 = st.columns(2)
-        with g1:
-            st.markdown("**By source**")
-            st.dataframe(by_source, width="stretch", hide_index=True)
-        with g2:
-            st.markdown("**By financial measure**")
-            st.dataframe(by_metric, width="stretch", hide_index=True)
-
-    display_cols = [
-        "source_type",
-        "source_file",
-        "claim_id",
-        "service_date",
-        "provider_name",
-        "hcpcs_code",
-        "service_description",
-        "metric",
-        "member_value",
-        "cms_benchmark",
-        "difference",
-        "difference_pct",
-        "benchmark_signal",
-        "cms_service_description",
-        "place_of_service",
-        "analysis_note",
-    ]
-    display = _format_benchmark_df(filtered[display_cols].copy())
-
-    st.markdown("### Service-level comparison")
-    st.dataframe(
-        display,
-        width="stretch",
-        hide_index=True,
-        column_config={
-            "member_value": st.column_config.TextColumn("Your value"),
-            "cms_benchmark": st.column_config.TextColumn("CMS benchmark"),
-            "difference": st.column_config.TextColumn("Difference"),
-            "difference_pct": st.column_config.TextColumn("Variance"),
-            "benchmark_signal": st.column_config.TextColumn("Result"),
-            "source_url": st.column_config.LinkColumn("CMS source"),
-        },
-    )
-
-    with st.expander("CMS source references", icon=":material/open_in_new:"):
-        reference_cols = [
-            "hcpcs_code",
-            "cms_service_description",
-            "benchmark_type",
-            "source_url",
-        ]
-        ref_df = filtered[reference_cols].drop_duplicates().sort_values("hcpcs_code")
-        st.dataframe(
-            ref_df,
-            width="stretch",
-            hide_index=True,
-            column_config={"source_url": st.column_config.LinkColumn("CMS source")},
-        )
-
-    with st.expander("How to interpret this comparison", icon=":material/info:"):
+    with st.container(border=True):
+        st.markdown("### What you can do with this information")
         st.write(
-            "The CMS Medicare Public Benchmark contains public Medicare averages, not commercial negotiated plan rates "
-            "or a final bill. Use it as directional cost context when reviewing a service."
+            "If you have questions, contact your insurer with the claim number and ask how the negotiated amount was determined. "
+            "For future non-emergency care, ask about in-network providers and request an estimate before the service."
         )
+
+    with st.expander("Reference details", icon=":material/open_in_new:"):
+        st.write(f"Insurance service code: {selected.get('hcpcs_code') or 'Not available'}")
+        st.write(f"Medicare service: {selected.get('cms_service_description') or 'Not available'}")
+        st.write(f"Place of service: {selected.get('place_of_service') or 'Not available'}")
+        st.write(f"Reference type: {selected.get('benchmark_type') or 'Not available'}")
+        source_url = selected.get("source_url")
+        if source_url and not pd.isna(source_url):
+            st.link_button("Open CMS source", str(source_url), icon=":material/open_in_new:")
+
+    with st.expander("Data and project notice", icon=":material/info:"):
         st.caption(TAB_DISCLAIMER)

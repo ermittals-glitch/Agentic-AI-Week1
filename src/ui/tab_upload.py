@@ -23,17 +23,17 @@ def _render_value_cards() -> None:
         (
             ":material/description:",
             "Understand your claims",
-            "See provider charges, allowed amounts, insurance payments, and your responsibility in one place.",
+            "See what the provider billed, your plan's negotiated amount, what insurance paid, and what you may owe.",
         ),
         (
             ":material/query_stats:",
             "Analyze your spending",
-            "Explore healthcare costs by provider, service category, and time period.",
+            "See your healthcare costs by provider, type of care, and month when you upload multiple claims.",
         ),
         (
             ":material/balance:",
             "Compare costs",
-            "Compare eligible procedures against public CMS Medicare cost benchmarks for additional context.",
+            "Compare eligible services with public Medicare averages for context, not as a billing audit.",
         ),
     ]
     for column, (icon, title, description) in zip(value_cols, cards):
@@ -74,7 +74,7 @@ def render_tab_upload() -> None:
         with st.container(border=True, height="stretch"):
             st.markdown(":material/table_chart:")
             badge_col, _ = st.columns([0.55, 0.45])
-            badge_col.badge("Recommended for analytics", icon=":material/recommend:", color="blue")
+            badge_col.badge("Best for multiple claims", icon=":material/recommend:", color="blue")
             st.markdown("### Upload claims workbook")
             st.write("Upload structured claims data for deeper spending analytics.")
             st.caption("Excel (.xlsx)")
@@ -96,24 +96,10 @@ def render_tab_upload() -> None:
             st.session_state["data_quality_report"] = None
             st.session_state["data_ready"] = True
             st.session_state["next_active_tab"] = "2. Claims Overview"
-            st.success("Claims data loaded successfully.")
-
-            if cms_source == "built_in":
-                st.info(
-                    "Using the CMS Medicare Public Benchmark for cost context. Commercial negotiated rates may differ."
-                )
-            else:
-                st.info("Using CMS Medicare Public Benchmark data from the uploaded workbook.")
-
-            with st.expander("Preview claims data"):
-                st.dataframe(claims_df, width="stretch")
-            with st.expander("Preview CMS reference data"):
-                st.dataframe(cms_df, width="stretch")
-            if not member_df.empty:
-                with st.expander("Preview member info"):
-                    st.dataframe(member_df, width="stretch")
-
-            st.success("Your data is processed. Opening Claims Overview...")
+            st.toast(
+                f"Loaded {claims_df['claim_id'].nunique()} claims. Opening your costs.",
+                icon=":material/check_circle:",
+            )
             st.rerun()
 
         except DataLoadError as exc:
@@ -127,18 +113,33 @@ def render_tab_upload() -> None:
             parsed_records.append(parse_eob_document(file.name, file.read()))
 
         parsed_df = pd.DataFrame(parsed_records)
-        st.session_state["parsed_eob_records"] = parsed_df
+        validated_mask = parsed_df["extraction_confidence"].eq("Validated")
+        validated_df = parsed_df[validated_mask].copy()
+        needs_review_df = parsed_df[~validated_mask]
+
+        if not needs_review_df.empty:
+            filenames = ", ".join(needs_review_df["source_file"].astype(str).tolist())
+            st.warning(
+                f"We could not confidently read all financial amounts in: {filenames}. "
+                "Those files were not included in the analysis. Try a clearer document or upload a claims workbook.",
+                icon=":material/warning:",
+            )
+
+        if validated_df.empty:
+            return
+
+        st.session_state["parsed_eob_records"] = validated_df
 
         if st.session_state.get("cms_df") is None or st.session_state.get("cms_df").empty:
             st.session_state["cms_df"] = load_default_cms_reference()
             st.session_state["cms_source"] = "built_in"
 
-        st.success(f"Parsed {len(parsed_df)} EOB file(s).")
-        st.dataframe(parsed_df.drop(columns=["raw_text"], errors="ignore"), width="stretch")
-
         st.session_state["data_ready"] = True
         st.session_state["next_active_tab"] = "2. Claims Overview"
-        st.success("Your data is processed. Opening Claims Overview...")
+        st.toast(
+            f"Read {len(validated_df)} EOB file{'s' if len(validated_df) != 1 else ''}. Opening your costs.",
+            icon=":material/check_circle:",
+        )
         st.rerun()
 
     if not st.session_state.get("data_ready"):

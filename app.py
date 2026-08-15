@@ -19,11 +19,11 @@ TAB_4 = "4. EOB Explainer"
 TAB_5 = "5. Cost Benchmark"
 
 NAV_LABELS = {
-    TAB_1: "Upload data",
-    TAB_2: "Claims overview",
-    TAB_3: "Spending",
-    TAB_4: "EOB explainer",
-    TAB_5: "CMS benchmark",
+    TAB_1: "Upload documents",
+    TAB_2: "Your costs",
+    TAB_4: "Understand a claim",
+    TAB_3: "Spending patterns",
+    TAB_5: "Compare with Medicare",
 }
 
 
@@ -44,6 +44,8 @@ def _init_session_state() -> None:
         "data_ready": False,
         "active_tab": TAB_1,
         "next_active_tab": None,
+        "selected_claim_id": None,
+        "selected_service_description": None,
         "upload_widget_seed": 0,
     }
     for key, value in defaults.items():
@@ -60,6 +62,8 @@ def _clear_analysis_state() -> None:
     st.session_state["cms_source"] = None
     st.session_state["data_ready"] = False
     st.session_state["active_tab"] = TAB_1
+    st.session_state["selected_claim_id"] = None
+    st.session_state["selected_service_description"] = None
     st.session_state["upload_widget_seed"] = int(st.session_state.get("upload_widget_seed", 0)) + 1
 
 
@@ -91,7 +95,7 @@ def _render_header() -> None:
                                 <p>
                                     Upload your Explanation of Benefits or claims data to see where your healthcare dollars went,
                                     understand what your insurance paid, what you may owe, and how service costs compare with
-                                    trusted public CMS benchmarks.
+                                    public Medicare averages for additional context.
                                 </p>
                                 <div class="trust-line">Your files are analyzed only for this session. Use de-identified data for this demonstration.</div>
                             </div>
@@ -122,7 +126,7 @@ def _render_navigation() -> str:
     if not data_ready:
         return TAB_1
 
-    options = [TAB_1, TAB_2, TAB_3, TAB_4, TAB_5]
+    options = [TAB_1, TAB_2, TAB_4, TAB_3, TAB_5]
 
     # Apply deferred tab navigation requests before rendering the widget.
     next_tab = st.session_state.get("next_active_tab")
@@ -154,7 +158,7 @@ def main() -> None:
     if st.session_state.get("data_ready"):
         c1, c2 = st.columns([0.75, 0.25])
         with c2:
-            if st.button("Clear Analysis", type="secondary", width="stretch"):
+            if st.button("Start over", type="secondary", icon=":material/refresh:", width="stretch"):
                 _clear_analysis_state()
                 st.rerun()
 

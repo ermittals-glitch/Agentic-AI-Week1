@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 GLOSSARY = {
-    "Provider Charge": "The amount the provider billed for the service.",
-    "Allowed Amount": "The amount your health plan recognizes for payment after plan rules/contract rates.",
-    "Insurance Paid": "The portion paid by your health plan.",
-    "Deductible": "Amount you pay before many plan benefits start sharing costs.",
-    "Copay": "A fixed dollar amount you pay for certain services.",
-    "Coinsurance": "A percentage of cost you pay after allowed amount is applied.",
-    "Patient Responsibility": "What remains for the member/patient or other payer after plan payment.",
+    "Amount the provider billed": "The provider's original charge before insurance discounts.",
+    "Plan's negotiated amount": (
+        "The amount your plan recognizes for this service. For in-network care, you generally do not owe the "
+        "difference between the original charge and this negotiated amount."
+    ),
+    "What insurance paid": "The portion paid by your health plan toward the negotiated amount.",
+    "Deductible": "The amount you pay before your plan starts sharing many costs. It usually resets each plan year.",
+    "Copay": "A fixed amount you pay for a visit or service, such as $25 for an office visit.",
+    "Coinsurance": "Your percentage of the negotiated amount after applicable deductible rules.",
+    "What you may owe": (
+        "The amount assigned to you or another payer on the claim. Secondary insurance or payments already made "
+        "may change the final provider bill."
+    ),
+    "Insurance service code": (
+        "A code insurers use to identify a medical service. It is mainly useful when asking your insurer about a claim."
+    ),
 }
 
 

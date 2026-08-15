@@ -13,9 +13,8 @@ from src.utils.formatters import to_currency
 
 
 SPEND_METRIC_MAP = {
-    "Provider Charge": "provider_charge",
-    "Insurance Paid": "insurance_paid",
-    "Patient Responsibility": "patient_responsibility",
+    "What you may owe": "patient_responsibility",
+    "What insurance paid": "insurance_paid",
 }
 
 
@@ -23,8 +22,8 @@ def render_tab_spending_analysis(
     claims_df: pd.DataFrame | None,
     parsed_eob_df: pd.DataFrame | None,
 ) -> None:
-    st.subheader("Healthcare spending")
-    st.caption("Understand where healthcare dollars went across services, providers, and time.")
+    st.subheader("Your spending patterns")
+    st.caption("See which types of care and providers account for the amounts in your uploaded claims.")
 
     has_claims = claims_df is not None and not claims_df.empty
     if has_claims:
@@ -38,24 +37,49 @@ def render_tab_spending_analysis(
         source_label = "Parsed EOB"
 
     metric_label = st.segmented_control(
-        "Financial measure",
+        "Show",
         list(SPEND_METRIC_MAP.keys()),
-        default="Patient Responsibility",
+        default="What you may owe",
         width="stretch",
     )
-    metric_label = metric_label or "Patient Responsibility"
+    metric_label = metric_label or "What you may owe"
     metric_col = SPEND_METRIC_MAP[metric_label]
 
     cat_df = by_category(data_for_analysis)
     prov_df = by_provider(data_for_analysis)
     month_df = by_month(data_for_analysis)
+    cat_df = cat_df.sort_values(metric_col, ascending=False)
+    prov_df = prov_df.sort_values(metric_col, ascending=True)
+
+    claim_count = data_for_analysis["claim_id"].nunique()
+    if claim_count <= 1:
+        total_amount = float(data_for_analysis[metric_col].sum())
+        with st.container(border=True):
+            st.markdown("### One claim is available")
+            st.metric(metric_label, to_currency(total_amount))
+            st.write(
+                "Spending patterns become useful after you upload multiple claims. For this claim, use "
+                "**Understand a claim** to see how the amounts were allocated."
+            )
+        with st.expander("Data and project notice", icon=":material/info:"):
+            st.caption(TAB_DISCLAIMER)
+        return
+
+    top_category = cat_df.iloc[0]
+    top_provider = prov_df.iloc[-1]
+    st.info(
+        f"Your largest {metric_label.lower()} category is **{top_category['service_category']}** "
+        f"({to_currency(top_category[metric_col])}). The provider with the largest amount is "
+        f"**{top_provider['provider_name']}** ({to_currency(top_provider[metric_col])}).",
+        icon=":material/insights:",
+    )
 
     fig_cat = px.bar(
         cat_df,
         x="service_category",
         y=metric_col,
         color_discrete_sequence=["#147d8a"],
-        labels={"service_category": "Service Category", metric_col: metric_label},
+        labels={"service_category": "Type of care", metric_col: metric_label},
     )
     fig_cat.update_layout(showlegend=False, margin=dict(l=10, r=10, t=15, b=10), height=330)
     fig_cat.update_traces(marker_line_width=0, hovertemplate="%{x}<br>$%{y:,.2f}<extra></extra>")
@@ -74,18 +98,16 @@ def render_tab_spending_analysis(
     chart_col1, chart_col2 = st.columns(2, gap="medium")
     with chart_col1:
         with st.container(border=True):
-            st.markdown("### By service category")
-            st.caption("Which types of care account for the selected amount.")
+            st.markdown("### By type of care")
+            st.caption(f"How your {metric_label.lower()} is distributed across services.")
             st.plotly_chart(fig_cat, width="stretch")
     with chart_col2:
         with st.container(border=True):
             st.markdown("### By provider")
-            st.caption("Providers ranked by the selected amount.")
+            st.caption(f"How your {metric_label.lower()} is distributed across providers.")
             st.plotly_chart(fig_prov, width="stretch")
 
-    if month_df.empty:
-        st.info("No valid service dates available for monthly trend view.")
-    else:
+    if month_df["service_month"].nunique() >= 2:
         fig_month = px.line(
             month_df,
             x="service_month",
@@ -102,6 +124,13 @@ def render_tab_spending_analysis(
             title_col.caption(f"Source: {source_label}")
             value_col.metric("Latest month", to_currency(month_df[metric_col].iloc[-1]))
             st.plotly_chart(fig_month, width="stretch")
+
+    with st.container(border=True):
+        st.markdown("### How to use this information")
+        st.write(
+            "Use these patterns to identify your biggest cost areas. For future non-emergency care, ask your insurer "
+            "about in-network options and ask the provider for an estimate before the service."
+        )
 
     with st.expander("Data and project notice", icon=":material/info:"):
         st.caption(TAB_DISCLAIMER)

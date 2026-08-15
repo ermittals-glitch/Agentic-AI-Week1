@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-APP_TITLE = "Healthcare Claims Analytics Dashboard"
-APP_SUBTITLE = "Understand your healthcare claims, costs, and benchmarks"
+APP_TITLE = "Your healthcare costs"
+APP_SUBTITLE = "See what insurance paid, what you may owe, and how each claim was calculated"
 
 GLOBAL_DISCLAIMER_LINES = [
     "This dashboard is for learning and demonstration purposes only.",
@@ -62,18 +62,18 @@ NUMERIC_CMS_COLUMNS = [
 ]
 
 FIELD_LABELS = {
-    "claim_id": "Claim Number",
-    "service_date": "Date of Service",
+    "claim_id": "Claim number",
+    "service_date": "Date of service",
     "provider_name": "Provider",
-    "hcpcs_code": "HCPCS Code",
-    "service_description": "Service Description",
-    "service_category": "Service Category",
-    "provider_charge": "Provider Charge",
-    "allowed_amount": "Allowed Amount",
-    "insurance_paid": "Insurance Paid",
+    "hcpcs_code": "Insurance service code",
+    "service_description": "Service",
+    "service_category": "Type of care",
+    "provider_charge": "Amount provider billed",
+    "allowed_amount": "Plan's negotiated amount",
+    "insurance_paid": "What insurance paid",
     "deductible": "Deductible",
     "copay": "Copay",
     "coinsurance": "Coinsurance",
-    "patient_responsibility": "Patient Responsibility",
-    "claim_status": "Claim Status",
+    "patient_responsibility": "What you may owe",
+    "claim_status": "Status",
 }
