@@ -67,11 +67,21 @@ def render_tab_spending_analysis(
 
     top_category = cat_df.iloc[0]
     top_provider = prov_df.iloc[-1]
+    top_category_amount = to_currency(top_category[metric_col]).replace("$", r"\$")
+    top_provider_amount = to_currency(top_provider[metric_col]).replace("$", r"\$")
     st.info(
         f"Your largest {metric_label.lower()} category is **{top_category['service_category']}** "
-        f"({to_currency(top_category[metric_col])}). The provider with the largest amount is "
-        f"**{top_provider['provider_name']}** ({to_currency(top_provider[metric_col])}).",
+        f"({top_category_amount}). The provider with the largest amount is "
+        f"**{top_provider['provider_name']}** ({top_provider_amount}).",
         icon=":material/insights:",
+    )
+
+    chart_font = dict(family="IBM Plex Sans, Segoe UI, sans-serif", color="#344b5c", size=13)
+    axis_style = dict(
+        title_font=dict(color="#344b5c", size=13),
+        tickfont=dict(color="#344b5c", size=12),
+        gridcolor="#dce7ed",
+        zerolinecolor="#c8d6df",
     )
 
     fig_cat = px.bar(
@@ -81,7 +91,14 @@ def render_tab_spending_analysis(
         color_discrete_sequence=["#147d8a"],
         labels={"service_category": "Type of care", metric_col: metric_label},
     )
-    fig_cat.update_layout(showlegend=False, margin=dict(l=10, r=10, t=15, b=10), height=330)
+    fig_cat.update_layout(
+        showlegend=False,
+        margin=dict(l=10, r=10, t=15, b=10),
+        height=330,
+        font=chart_font,
+        xaxis=axis_style,
+        yaxis=axis_style,
+    )
     fig_cat.update_traces(marker_line_width=0, hovertemplate="%{x}<br>$%{y:,.2f}<extra></extra>")
 
     fig_prov = px.bar(
@@ -92,7 +109,14 @@ def render_tab_spending_analysis(
         color_discrete_sequence=["#2d9c88"],
         labels={"provider_name": "Provider", metric_col: metric_label},
     )
-    fig_prov.update_layout(showlegend=False, margin=dict(l=10, r=10, t=15, b=10), height=330)
+    fig_prov.update_layout(
+        showlegend=False,
+        margin=dict(l=10, r=10, t=15, b=10),
+        height=330,
+        font=chart_font,
+        xaxis=axis_style,
+        yaxis=axis_style,
+    )
     fig_prov.update_traces(marker_line_width=0, hovertemplate="$%{x:,.2f}<br>%{y}<extra></extra>")
 
     chart_col1, chart_col2 = st.columns(2, gap="medium")
@@ -116,7 +140,14 @@ def render_tab_spending_analysis(
             labels={"service_month": "Month", metric_col: metric_label},
             color_discrete_sequence=["#126a85"],
         )
-        fig_month.update_layout(showlegend=False, margin=dict(l=10, r=10, t=15, b=10), height=300)
+        fig_month.update_layout(
+            showlegend=False,
+            margin=dict(l=10, r=10, t=15, b=10),
+            height=300,
+            font=chart_font,
+            xaxis=axis_style,
+            yaxis=axis_style,
+        )
         fig_month.update_traces(line_width=3, marker_size=8, hovertemplate="%{x}<br>$%{y:,.2f}<extra></extra>")
         with st.container(border=True):
             title_col, value_col = st.columns([0.72, 0.28], vertical_alignment="center")

@@ -156,9 +156,15 @@ def main() -> None:
     _render_header()
 
     if st.session_state.get("data_ready"):
-        c1, c2 = st.columns([0.75, 0.25])
+        c1, c2 = st.columns([0.78, 0.22])
         with c2:
-            if st.button("Start over", type="secondary", icon=":material/refresh:", width="stretch"):
+            if st.button(
+                "Start over with new files",
+                type="primary",
+                icon=":material/refresh:",
+                width="stretch",
+                help="Clear this session and upload different EOBs or claims data.",
+            ):
                 _clear_analysis_state()
                 st.rerun()
 

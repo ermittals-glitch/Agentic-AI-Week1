@@ -12,7 +12,7 @@ from src.utils.text_helpers import build_disclaimer_block
 
 
 def _render_initial_combined_disclaimer() -> None:
-    with st.expander("Important Disclaimer", expanded=False):
+    with st.expander("Important disclaimer", expanded=True, icon=":material/warning:"):
         lines = GLOBAL_DISCLAIMER_LINES + [TAB_DISCLAIMER]
         st.markdown(build_disclaimer_block(lines))
 

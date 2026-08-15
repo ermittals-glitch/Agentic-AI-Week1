@@ -86,7 +86,8 @@ def render_tab_eob_explainer(claims_df: pd.DataFrame | None, parsed_eob_df: pd.D
     with detail_col1:
         with st.container(border=True):
             st.markdown("### What this claim means")
-            st.write(explain_claim_line(selected_row))
+            explanation = explain_claim_line(selected_row).replace("$", r"\$")
+            st.markdown(explanation)
             st.caption(
                 f"Provider: {selected_row['provider_name']}  •  Service: {selected_row['service_description']}"
             )

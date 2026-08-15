@@ -23,4 +23,10 @@ GLOSSARY = {
 
 
 def build_disclaimer_block(lines: list[str]) -> str:
-    return "\n".join([f"- {line}" for line in lines])
+    formatted_lines = []
+    for line in lines:
+        if line == "This project is not affiliated with, endorsed by, or representing any organization.":
+            formatted_lines.append(f"- :red[**{line}**]")
+        else:
+            formatted_lines.append(f"- {line}")
+    return "\n".join(formatted_lines)
